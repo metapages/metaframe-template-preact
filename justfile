@@ -14,13 +14,10 @@ PACKAGE_NAME_SHORT                 := file_name(`cat package.json | jq -r '.name
 export DOCKER_IMAGE_PREFIX         := "ghcr.io/metapages/" + PACKAGE_NAME_SHORT
 # Always assume our current cloud ops image is versioned to the exact same app images we deploy
 export DOCKER_TAG                  := `if [ "${GITHUB_ACTIONS}" = "true" ]; then echo "${GITHUB_SHA}"; else echo "$(git rev-parse --short=8 HEAD)"; fi`
-# Some commands use deno because it's great at this stuff
-CLOUDSEED_DENO                     := "https://deno.land/x/cloudseed@v0.0.18"
-# cache deno modules on the host so they can be transferred to the docker container
-export DENO_DIR                    := ROOT + "/.tmp/deno"
+# The NPM_TOKEN is required for publishing to https://www.npmjs.com
+NPM_TOKEN                          := env_var_or_default("NPM_TOKEN", "")
 vite                               := "VITE_APP_FQDN=" + APP_FQDN + " VITE_APP_PORT=" + APP_PORT + " NODE_OPTIONS='--max_old_space_size=16384' ./node_modules/vite/bin/vite.js"
 tsc                                := "./node_modules/typescript/bin/tsc"
-# minimal formatting, bold is very useful
 # minimal formatting, bold is very useful
 bold                               := '\033[1m'
 normal                             := '\033[0m'
@@ -57,48 +54,84 @@ _dev: _ensure_npm_modules (_tsc "--build")
     #!/usr/bin/env bash
     APP_ORIGIN=https://${APP_FQDN}:${APP_PORT}
     echo "Browser development pointing to: ${APP_ORIGIN}"
-    VITE_APP_ORIGIN=${APP_ORIGIN} {{vite}}
+    VITE_APP_ORIGIN=${APP_ORIGIN} {{vite}} --clearScreen false
 
-# Build production brower assets into ./docs
-@build BUILD_SUB_DIR="": (_tsc "--build") (_browser_assets_build BUILD_SUB_DIR)
+# Build the browser client static assets and npm module
+build: (_tsc "--build") _browser_assets_build _npm_build
 
-# Test. Currently testing is only building.
-@test: build
+# Test: currently bare minimum: only building. Need proper test harness.
+@test: _npm_build
 
-# Publish site to github-pages (includes all prev versions) https://pages.github.com/
-publish: _ensureGitPorcelain
-    #!/usr/bin/env bash
-    set -euo pipefail
-    # Mostly CURRENT_BRANCH should be main, but maybe you are testing on a different branch
-    CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
-    if [ -z "$(git branch --list gh-pages)" ]; then
-        git checkout -b gh-pages;
-    fi
-    git checkout gh-pages
-    # Prefer changes in CURRENT_BRANCH, not our incoming gh-pages rebase
-    git rebase -Xours ${CURRENT_BRANCH}
-    just build ./v$(cat package.json | jq -r .version)
-    # Copy the new build to the root
-    find docs/ -maxdepth 1 -type f -exec rm "{}" \;
-    rm -rf docs/assets
-    cp -r docs/v$(cat package.json | jq -r .version)/* docs/
-    # Now commit and push
-    git add --all --force docs
-    git commit -m "site v$(cat package.json | jq -r .version)"
-    git push -uf origin gh-pages
-    git checkout ${CURRENT_BRANCH}
-    echo -e "👉 Github configuration (once): 🔗 https://github.com/$(git remote get-url origin | sd 'git@github.com:' '' | sd '.git' '')/settings/pages"
-    echo -e "  - {{green}}Source{{normal}}"
-    echo -e "    - {{green}}Branch{{normal}}: gh-pages 📁 /docs"
+# Publish to npm and github pages.
+publish npmversionargs="patch": _ensureGitPorcelain test (_npm_version npmversionargs) _npm_publish _githubpages_publish
+    @# Push the tags up
+    git push origin v$(cat package.json | jq -r '.version')
 
 # Rebuild the client on changes, but do not serve
-watch:
-    watchexec -w src -w tsconfig.json -w package.json -w vite.config.ts -- just build
+watch BUILD_SUB_DIR="./":
+    watchexec -w src -w tsconfig.json -w package.json -w vite.config.ts -- just _npm_build
 
-# Deletes: .certs dist
-clean:
-    rm -rf .certs dist
+# Watch and serve browser client. Can't use vite to serve: https://github.com/vitejs/vite/issues/2754
+serve BUILD_SUB_DIR="": (_browser_assets_build BUILD_SUB_DIR)
+    cd docs && ../node_modules/http-server/bin/http-server --cors '*' -o {{BUILD_SUB_DIR}} -a {{APP_FQDN}} -p {{APP_PORT}} --ssl --cert ../.certs/{{APP_FQDN}}.pem --key ../.certs/{{APP_FQDN}}-key.pem
 
+# NPM commands: build, version, publish
+npm command="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    if [ "{{command}}" = "build" ];
+    then
+        just _npm_build
+    elif [ "{{command}}" = "version" ];
+    then
+        just _npm_version
+    elif [ "{{command}}" = "publish" ];
+    then
+        just _npm_publish
+    else
+        echo ""
+        echo "👉 just npm [ build | version | publish ]"
+        echo ""
+    fi
+
+# Build npm package for publishing
+_npm_build: _ensure_npm_modules
+    mkdir -p dist
+    rm -rf dist/*
+    {{tsc}} --noEmit false --project ./tsconfig.npm.json
+    @echo "  ✅ npm build"
+
+# bumps version, commits change, git tags
+_npm_version npmversionargs="patch":
+    npm version {{npmversionargs}}
+
+# If the npm version does not exist, publish the module
+_npm_publish: _require_NPM_TOKEN _npm_build
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ "$CI" != "true" ]; then
+        # This check is here to prevent publishing if there are uncommitted changes, but this check does not work in CI environments
+        # because it starts as a clean checkout and git is not installed and it is not a full checkout, just the tip
+        if [[ $(git status --short) != '' ]]; then
+            git status
+            echo -e '💥 Cannot publish with uncommitted changes'
+            exit 2
+        fi
+    fi
+    VERSION=$(cat package.json | jq -r '.version')
+    INDEX=$(npm view $(cat package.json | jq -r .name) versions --json | jq "index( \"$VERSION\" )")
+    if [ "$INDEX" != "null" ]; then
+        echo -e '🌳 Version exists, not publishing'
+        exit 0
+    fi
+    echo "PUBLISHING npm version $VERSION"
+    if [ ! -f .npmrc ]; then
+        echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > .npmrc
+    fi
+    npm publish --access public .
+
+# build production brower assets
 _browser_assets_build BUILD_SUB_DIR="": _ensure_npm_modules
     mkdir -p docs/{{BUILD_SUB_DIR}}
     find docs/{{BUILD_SUB_DIR}} -maxdepth 1 -type f -exec rm "{}" \;
@@ -142,6 +175,47 @@ _mkcert:
 @_vite +args="":
     {{vite}} {{args}}
 
+# GitHub Pages commands: publish (more coming)
+ghpages command="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    if [ "{{command}}" = "publish" ];
+    then
+        just _githubpages_publish
+    else
+        echo ""
+        echo "👉 just ghpages [ publish ]"
+        echo ""
+    fi
+
+# update "gh-pages" branch with the (versioned and default) current build (and keeping all previous versions)
+_githubpages_publish: _ensureGitPorcelain
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # Mostly CURRENT_BRANCH should be main, but maybe you are testing on a different branch
+    CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+    if [ -z "$(git branch --list gh-pages)" ]; then
+        git checkout -b gh-pages;
+    fi
+    git checkout gh-pages
+    # Prefer changes in CURRENT_BRANCH, not our incoming gh-pages rebase
+    git rebase -Xours ${CURRENT_BRANCH}
+    just _browser_assets_build ./v$(cat package.json | jq -r .version)
+    just _browser_assets_build
+    # Now commit and push
+    git add --all --force docs
+    git commit -m "site v$(cat package.json | jq -r .version)"
+    git push -uf origin gh-pages
+    git checkout ${CURRENT_BRANCH}
+    echo -e "👉 Github configuration (once): 🔗 https://github.com/$(git remote get-url origin | sd 'git@github.com:' '' | sd '.git' '')/settings/pages"
+    echo -e "  - {{green}}Source{{normal}}"
+    echo -e "    - {{green}}Branch{{normal}}: gh-pages 📁 /docs"
+
+# Deletes: .certs dist
+clean:
+    rm -rf .certs dist
+
 ####################################################################################
 # Ensure docker image for local and CI operations
 # Hoist into a docker container with all require CLI tools installed
@@ -150,8 +224,9 @@ _mkcert:
 @_docker +args="bash": _build_docker
     echo -e "🌱 Entering docker context: {{bold}}{{DOCKER_IMAGE_PREFIX}}:{{DOCKER_TAG}} from <repo/>Dockerfile 🚪🚪{{normal}}"
     mkdir -p {{ROOT}}/.tmp
-    mkdir -p {{ROOT}}/.node_modules
     touch {{ROOT}}/.tmp/.bash_history
+    touch {{ROOT}}/.tmp/.aliases
+    if [ -f ~/.aliases ]; then cp ~/.aliases {{ROOT}}/.tmp/.aliases; fi
     export WORKSPACE=/repo && \
         docker run \
             --rm \
@@ -162,36 +237,23 @@ _mkcert:
             -e DOCKER_IMAGE_PREFIX={{DOCKER_IMAGE_PREFIX}} \
             -e HISTFILE=$WORKSPACE/.tmp/.bash_history \
             -e WORKSPACE=$WORKSPACE \
-            $(if [ -f .env ]; then echo "-v {{ROOT}}/.env:$WORKSPACE/.env"; else echo ""; fi) \
-            -v {{ROOT}}/.certs:$WORKSPACE/.certs \
-            -v {{ROOT}}/.git:$WORKSPACE/.git \
-            -v {{ROOT}}/.gitignore:$WORKSPACE/.gitignore \
-            $(if [ -f .npmrc ]; then echo "-v {{ROOT}}/.npmrc:$WORKSPACE/.npmrc"; else echo ""; fi) \
-            -v {{ROOT}}/dist:$WORKSPACE/dist \
-            -v {{ROOT}}/docs:$WORKSPACE/docs \
-            -v {{ROOT}}/index.html:$WORKSPACE/index.html \
-            -v {{ROOT}}/justfile:$WORKSPACE/justfile \
-            -v {{ROOT}}/package-lock.json:$WORKSPACE/package-lock.json \
-            -v {{ROOT}}/package.json:$WORKSPACE/package.json \
-            -v {{ROOT}}/public:$WORKSPACE/public \
-            -v {{ROOT}}/README.md:$WORKSPACE/README.md \
-            -v {{ROOT}}/src:$WORKSPACE/src \
-            -v {{ROOT}}/test:$WORKSPACE/test \
-            -v {{ROOT}}/tsconfig.json:$WORKSPACE/tsconfig.json \
-            -v {{ROOT}}/vite.config.ts:$WORKSPACE/vite.config.ts \
-            -v $HOME/.gitconfig:/root/.gitconfig \
-            -v $HOME/.ssh:/root/.ssh \
+            -v {{ROOT}}:$WORKSPACE \
+            $(if [ -d $HOME/.gitconfig ]; then echo "-v $HOME/.gitconfig:/root/.gitconfig"; else echo ""; fi) \
+            $(if [ -d $HOME/.ssh ]; then echo "-v $HOME/.ssh:/root/.ssh"; else echo ""; fi) \
             -p {{APP_PORT}}:{{APP_PORT}} \
             --add-host {{APP_FQDN}}:127.0.0.1 \
             -w $WORKSPACE \
             {{DOCKER_IMAGE_PREFIX}}:{{DOCKER_TAG}} {{args}} || true
 
 # If the ./app docker image in not build, then build it
-@_build_docker:
-    if [[ "$(docker images -q {{DOCKER_IMAGE_PREFIX}}:{{DOCKER_TAG}} 2> /dev/null)" == "" ]]; then \
-        echo -e "🌱🌱  ➡ {{bold}}Building docker image ...{{normal}} 🚪🚪 "; \
-        echo -e "🌱 </> {{bold}}docker build -t {{DOCKER_IMAGE_PREFIX}}:{{DOCKER_TAG}} . {{normal}}🚪 "; \
-        docker build -t {{DOCKER_IMAGE_PREFIX}}:{{DOCKER_TAG}} . ; \
+_build_docker:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    if [[ "$(docker images -q {{DOCKER_IMAGE_PREFIX}}:{{DOCKER_TAG}} 2> /dev/null)" == "" ]]; then
+        echo -e "🌱🌱  ➡ {{bold}}Building docker image ...{{normal}} 🚪🚪 ";
+        echo -e "🌱 </> {{bold}}docker build -t {{DOCKER_IMAGE_PREFIX}}:{{DOCKER_TAG}} . {{normal}}🚪 ";
+        docker build -t {{DOCKER_IMAGE_PREFIX}}:{{DOCKER_TAG}} . ;
     fi
 
 _ensure_inside_docker:
@@ -202,6 +264,12 @@ _ensure_inside_docker:
         exit 1
     fi
 
-@_ensureGitPorcelain: _ensure_inside_docker
-    printf "import { ensureGitNoUncommitted } from '{{CLOUDSEED_DENO}}/git/mod.ts';\
-    await ensureGitNoUncommitted();" | deno run --unstable --allow-run --allow-read -
+@_ensureGitPorcelain:
+    if [ ! -z "$(git status --untracked-files=no --porcelain)" ]; then \
+        echo -e " ❗ Uncommitted files:"; \
+        git status --untracked-files=no --porcelain; \
+        exit 1; \
+    fi
+
+@_require_NPM_TOKEN:
+	if [ -z "{{NPM_TOKEN}}" ]; then echo "Missing NPM_TOKEN env var"; exit 1; fi

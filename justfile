@@ -135,10 +135,10 @@ _npm_publish: _require_NPM_TOKEN
     fi
 
     echo -e "  👉 PUBLISHING npm version $VERSION"
-    # if [ ! -f .npmrc ]; then
-    #     echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > .npmrc
-    # fi
-    # npm publish --access public .
+    if [ ! -f .npmrc ]; then
+        echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > .npmrc
+    fi
+    npm publish --access public .
 
 # build production brower assets
 _browser_assets_build BUILD_SUB_DIR="": _ensure_npm_modules

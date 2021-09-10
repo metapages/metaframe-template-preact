@@ -134,7 +134,7 @@ _npm_publish: _require_NPM_TOKEN
         fi
     fi
 
-    echo "PUBLISHING npm version $VERSION"
+    echo -e "  👉 PUBLISHING npm version $VERSION"
     # if [ ! -f .npmrc ]; then
     #     echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > .npmrc
     # fi

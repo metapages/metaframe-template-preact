@@ -52,4 +52,4 @@ COPY package-lock.json ./
 RUN npm i
 
 # Add user aliases to the shell if available
-RUN echo "if [ -f /repo/.tmp/.aliases ]; then source /repo/.tmp/.aliases; fi" >> /root/.bashrc
+RUN if [ -f /repo/.tmp/.aliases ]; then echo "source /repo/.tmp/.aliases" >> /root/.bashrc ; fi

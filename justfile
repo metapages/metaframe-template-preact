@@ -75,6 +75,14 @@ publish npmversionargs="patch": _ensureGitPorcelain test (_npm_version npmversio
     @# Push the tags up
     git push origin v$(cat package.json | jq -r '.version')
 
+# Rebuild the client on changes, but do not serve
+watch BUILD_SUB_DIR="./":
+    watchexec -w src -w tsconfig.json -w package.json -w vite.config.ts -- just _npm_build
+
+# Watch and serve browser client. Can't use vite to serve: https://github.com/vitejs/vite/issues/2754
+serve BUILD_SUB_DIR="": (_browser_assets_build BUILD_SUB_DIR)
+    cd docs && ../node_modules/http-server/bin/http-server --cors '*' -o {{BUILD_SUB_DIR}} -a {{APP_FQDN}} -p {{APP_PORT}} --ssl --cert ../.certs/{{APP_FQDN}}.pem --key ../.certs/{{APP_FQDN}}-key.pem
+
 # NPM commands: build, version, publish
 npm command="":
     #!/usr/bin/env bash
@@ -95,39 +103,8 @@ npm command="":
         echo ""
     fi
 
-# GitHub Pages commands: publish (more coming)
-ghpages command="":
-    #!/usr/bin/env bash
-    set -euo pipefail
-
-    if [ "{{command}}" = "publish" ];
-    then
-        just _githubpages_publish
-    else
-        echo ""
-        echo "👉 just ghpages [ publish ]"
-        echo ""
-    fi
-
-# Deletes: .certs dist
-clean:
-    rm -rf .certs dist
-
-# Rebuild the client on changes, but do not serve
-watch BUILD_SUB_DIR="./":
-    watchexec -w src -w tsconfig.json -w package.json -w vite.config.ts -- just _npm_build
-
-# Watch and serve browser client. Can't use vite to serve: https://github.com/vitejs/vite/issues/2754
-serve BUILD_SUB_DIR="": (_browser_assets_build BUILD_SUB_DIR)
-    cd docs && ../node_modules/http-server/bin/http-server --cors '*' -o {{BUILD_SUB_DIR}} -a {{APP_FQDN}} -p {{APP_PORT}} --ssl --cert ../.certs/{{APP_FQDN}}.pem --key ../.certs/{{APP_FQDN}}-key.pem
-
 # Build npm package for publishing
-@_npm_build: _ensure_npm_modules
-    if [ "{{NPM_PUBLISH}}" = "true" ]; then \
-        just _npm_build_internal; \
-    fi
-
-_npm_build_internal:
+_npm_build: _ensure_npm_modules
     mkdir -p dist
     rm -rf dist/*
     {{tsc}} --noEmit false --project ./tsconfig.npm.json
@@ -140,9 +117,6 @@ _npm_version npmversionargs="patch":
 # If the npm version does not exist, publish the module
 _npm_publish: _require_NPM_TOKEN _npm_build
     #!/usr/bin/env bash
-    if [ "{{NPM_PUBLISH}}" != "true" ]; then
-        exit 0
-    fi
     set -euo pipefail
     if [ "$CI" != "true" ]; then
         # This check is here to prevent publishing if there are uncommitted changes, but this check does not work in CI environments
@@ -153,22 +127,13 @@ _npm_publish: _require_NPM_TOKEN _npm_build
             exit 2
         fi
     fi
-
-    PACKAGE_EXISTS=true
-    if npm search $(cat package.json | jq -r .name) | grep -q  "No matches found"; then
-        echo -e "  👉 new npm module !"
-        PACKAGE_EXISTS=false
-    fi
     VERSION=$(cat package.json | jq -r '.version')
-    if [ $PACKAGE_EXISTS = "true" ]; then
-        INDEX=$(npm view $(cat package.json | jq -r .name) versions --json | jq "index( \"$VERSION\" )")
-        if [ "$INDEX" != "null" ]; then
-            echo -e '  🌳 Version exists, not publishing'
-            exit 0
-        fi
+    INDEX=$(npm view $(cat package.json | jq -r .name) versions --json | jq "index( \"$VERSION\" )")
+    if [ "$INDEX" != "null" ]; then
+        echo -e '🌳 Version exists, not publishing'
+        exit 0
     fi
-
-    echo -e "  👉 PUBLISHING npm version $VERSION"
+    echo "PUBLISHING npm version $VERSION"
     if [ ! -f .npmrc ]; then
         echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > .npmrc
     fi
@@ -218,33 +183,46 @@ _mkcert:
 @_vite +args="":
     {{vite}} {{args}}
 
-# update "gh-pages" branch with the (versioned and default) current build (./docs) (and keeping all previous versions)
-_githubpages_publish: _ensureGitPorcelain
+# GitHub Pages commands: publish (more coming)
+ghpages command="":
     #!/usr/bin/env bash
     set -euo pipefail
 
-    # Build first
-    just _browser_assets_build ./v$(cat package.json | jq -r .version)
-    just _browser_assets_build
+    if [ "{{command}}" = "publish" ];
+    then
+        just _githubpages_publish
+    else
+        echo ""
+        echo "👉 just ghpages [ publish ]"
+        echo ""
+    fi
 
+# update "gh-pages" branch with the (versioned and default) current build (and keeping all previous versions)
+_githubpages_publish: _ensureGitPorcelain
+    #!/usr/bin/env bash
+    set -euo pipefail
     # Mostly CURRENT_BRANCH should be main, but maybe you are testing on a different branch
     CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
     if [ -z "$(git branch --list gh-pages)" ]; then
         git checkout -b gh-pages;
     fi
-
     git checkout gh-pages
-
+    # Prefer changes in CURRENT_BRANCH, not our incoming gh-pages rebase
+    git rebase -Xours ${CURRENT_BRANCH}
+    just _browser_assets_build ./v$(cat package.json | jq -r .version)
+    just _browser_assets_build
     # Now commit and push
     git add --all --force docs
     git commit -m "site v$(cat package.json | jq -r .version)"
     git push -uf origin gh-pages
-
-    # Return to the original branch
     git checkout ${CURRENT_BRANCH}
     echo -e "👉 Github configuration (once): 🔗 https://github.com/$(git remote get-url origin | sd 'git@github.com:' '' | sd '.git' '')/settings/pages"
     echo -e "  - {{green}}Source{{normal}}"
     echo -e "    - {{green}}Branch{{normal}}: gh-pages 📁 /docs"
+
+# Deletes: .certs dist
+clean:
+    rm -rf .certs dist
 
 ####################################################################################
 # Ensure docker image for local and CI operations

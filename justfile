@@ -202,16 +202,20 @@ ghpages command="":
 _githubpages_publish: _ensureGitPorcelain
     #!/usr/bin/env bash
     set -euo pipefail
+
+    just _browser_assets_build ./v$(cat package.json | jq -r .version)
+    just _browser_assets_build
+
     # Mostly CURRENT_BRANCH should be main, but maybe you are testing on a different branch
     CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
     if [ -z "$(git branch --list gh-pages)" ]; then
         git checkout -b gh-pages;
     fi
+
     git checkout gh-pages
     # Prefer changes in CURRENT_BRANCH, not our incoming gh-pages rebase
-    git rebase -Xours ${CURRENT_BRANCH}
-    just _browser_assets_build ./v$(cat package.json | jq -r .version)
-    just _browser_assets_build
+    # git rebase -Xours ${CURRENT_BRANCH}
+
     # Now commit and push
     git add --all --force docs
     git commit -m "site v$(cat package.json | jq -r .version)"

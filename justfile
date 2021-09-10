@@ -33,9 +33,12 @@ _help:
     # exit when any command fails
     set -euo pipefail
     if [ -f /.dockerenv ]; then
-        echo ""
+        echo -e ""
         just --list --unsorted --list-heading $'🌱 Commands:\n\n'
-        echo ""
+        echo -e ""
+        echo -e "    Github  URL 🔗 {{green}}$(cat package.json | jq -r '.repository.url'){{normal}}"
+        echo -e "    Publish URL 🔗 {{green}}https://$(cat package.json | jq -r '.name' | sd '/.*' '' | sd '@' '').github.io/{{PACKAGE_NAME_SHORT}}/{{normal}}"
+        echo -e ""
     else
         just _docker;
     fi
@@ -67,14 +70,6 @@ publish npmversionargs="patch": _ensureGitPorcelain test (_npm_version npmversio
     @# Push the tags up
     git push origin v$(cat package.json | jq -r '.version')
 
-# Rebuild the client on changes, but do not serve
-watch BUILD_SUB_DIR="./":
-    watchexec -w src -w tsconfig.json -w package.json -w vite.config.ts -- just _npm_build
-
-# Watch and serve browser client. Can't use vite to serve: https://github.com/vitejs/vite/issues/2754
-serve BUILD_SUB_DIR="": (_browser_assets_build BUILD_SUB_DIR)
-    cd docs && ../node_modules/http-server/bin/http-server --cors '*' -o {{BUILD_SUB_DIR}} -a {{APP_FQDN}} -p {{APP_PORT}} --ssl --cert ../.certs/{{APP_FQDN}}.pem --key ../.certs/{{APP_FQDN}}-key.pem
-
 # NPM commands: build, version, publish
 npm command="":
     #!/usr/bin/env bash
@@ -94,6 +89,32 @@ npm command="":
         echo "👉 just npm [ build | version | publish ]"
         echo ""
     fi
+
+# GitHub Pages commands: publish (more coming)
+ghpages command="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    if [ "{{command}}" = "publish" ];
+    then
+        just _githubpages_publish
+    else
+        echo ""
+        echo "👉 just ghpages [ publish ]"
+        echo ""
+    fi
+
+# Deletes: .certs dist
+clean:
+    rm -rf .certs dist
+
+# Rebuild the client on changes, but do not serve
+watch BUILD_SUB_DIR="./":
+    watchexec -w src -w tsconfig.json -w package.json -w vite.config.ts -- just _npm_build
+
+# Watch and serve browser client. Can't use vite to serve: https://github.com/vitejs/vite/issues/2754
+serve BUILD_SUB_DIR="": (_browser_assets_build BUILD_SUB_DIR)
+    cd docs && ../node_modules/http-server/bin/http-server --cors '*' -o {{BUILD_SUB_DIR}} -a {{APP_FQDN}} -p {{APP_PORT}} --ssl --cert ../.certs/{{APP_FQDN}}.pem --key ../.certs/{{APP_FQDN}}-key.pem
 
 # Build npm package for publishing
 _npm_build: _ensure_npm_modules
@@ -184,25 +205,12 @@ _mkcert:
 @_vite +args="":
     {{vite}} {{args}}
 
-# GitHub Pages commands: publish (more coming)
-ghpages command="":
-    #!/usr/bin/env bash
-    set -euo pipefail
-
-    if [ "{{command}}" = "publish" ];
-    then
-        just _githubpages_publish
-    else
-        echo ""
-        echo "👉 just ghpages [ publish ]"
-        echo ""
-    fi
-
-# update "gh-pages" branch with the (versioned and default) current build (and keeping all previous versions)
+# update "gh-pages" branch with the (versioned and default) current build (./docs) (and keeping all previous versions)
 _githubpages_publish: _ensureGitPorcelain
     #!/usr/bin/env bash
     set -euo pipefail
 
+    # Build first
     just _browser_assets_build ./v$(cat package.json | jq -r .version)
     just _browser_assets_build
 
@@ -213,21 +221,17 @@ _githubpages_publish: _ensureGitPorcelain
     fi
 
     git checkout gh-pages
-    # Prefer changes in CURRENT_BRANCH, not our incoming gh-pages rebase
-    # git rebase -Xours ${CURRENT_BRANCH}
 
     # Now commit and push
     git add --all --force docs
     git commit -m "site v$(cat package.json | jq -r .version)"
     git push -uf origin gh-pages
+
+    # Return to the original branch
     git checkout ${CURRENT_BRANCH}
     echo -e "👉 Github configuration (once): 🔗 https://github.com/$(git remote get-url origin | sd 'git@github.com:' '' | sd '.git' '')/settings/pages"
     echo -e "  - {{green}}Source{{normal}}"
     echo -e "    - {{green}}Branch{{normal}}: gh-pages 📁 /docs"
-
-# Deletes: .certs dist
-clean:
-    rm -rf .certs dist
 
 ####################################################################################
 # Ensure docker image for local and CI operations

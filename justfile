@@ -232,7 +232,7 @@ clean:
             --rm \
             -ti \
             -e DOCKER_IMAGE_PREFIX=${DOCKER_IMAGE_PREFIX} \
-            -e PS1="< $(basename $PWD)/> " \
+            -e PS1="<$(basename $PWD)/> " \
             -e PROMPT="<%/% > " \
             -e DOCKER_IMAGE_PREFIX={{DOCKER_IMAGE_PREFIX}} \
             -e HISTFILE=$WORKSPACE/.tmp/.bash_history \

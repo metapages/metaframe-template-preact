@@ -106,8 +106,8 @@ _npm_build: _ensure_npm_modules
 _npm_version npmversionargs="patch":
     npm version {{npmversionargs}}
 
-# If the npm version does not exist, publish the module _npm_build
-_npm_publish: _require_NPM_TOKEN
+# If the npm version does not exist, publish the module
+_npm_publish: _require_NPM_TOKEN _npm_build
     #!/usr/bin/env bash
     set -euo pipefail
     if [ "$CI" != "true" ]; then

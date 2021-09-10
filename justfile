@@ -130,13 +130,14 @@ _npm_publish: _require_NPM_TOKEN
 
     PACKAGE_EXISTS=true
     if npm search $(cat package.json | jq -r .name) | grep -q  "No matches found"; then
+        echo -e "  👉 new npm module !"
         PACKAGE_EXISTS=false
     fi
     VERSION=$(cat package.json | jq -r '.version')
     if [ $PACKAGE_EXISTS = "true" ]; then
         INDEX=$(npm view $(cat package.json | jq -r .name) versions --json | jq "index( \"$VERSION\" )")
         if [ "$INDEX" != "null" ]; then
-            echo -e '🌳 Version exists, not publishing'
+            echo -e '  🌳 Version exists, not publishing'
             exit 0
         fi
     fi

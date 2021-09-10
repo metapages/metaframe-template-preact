@@ -129,7 +129,7 @@ _npm_publish: _require_NPM_TOKEN
     fi
 
     PACKAGE_EXISTS=true
-    if npm search lodash | grep -q  "No matches found"; then
+    if npm search $(cat package.json | jq -r .name) | grep -q  "No matches found"; then
         PACKAGE_EXISTS=false
     fi
     VERSION=$(cat package.json | jq -r '.version')

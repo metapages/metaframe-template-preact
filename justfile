@@ -127,17 +127,25 @@ _npm_publish: _require_NPM_TOKEN _npm_build
             exit 2
         fi
     fi
+
+    PACKAGE_EXISTS=true
+    if [ npm search lodash | grep "No matches found" ]; then
+        PACKAGE_EXISTS=false
+    fi
     VERSION=$(cat package.json | jq -r '.version')
-    INDEX=$(npm view $(cat package.json | jq -r .name) versions --json | jq "index( \"$VERSION\" )")
-    if [ "$INDEX" != "null" ]; then
-        echo -e '🌳 Version exists, not publishing'
-        exit 0
+    if [ $PACKAGE_EXISTS = "true" ]; then
+        INDEX=$(npm view $(cat package.json | jq -r .name) versions --json | jq "index( \"$VERSION\" )")
+        if [ "$INDEX" != "null" ]; then
+            echo -e '🌳 Version exists, not publishing'
+            exit 0
+        fi
     fi
+
     echo "PUBLISHING npm version $VERSION"
-    if [ ! -f .npmrc ]; then
-        echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > .npmrc
-    fi
-    npm publish --access public .
+    # if [ ! -f .npmrc ]; then
+    #     echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > .npmrc
+    # fi
+    # npm publish --access public .
 
 # build production brower assets
 _browser_assets_build BUILD_SUB_DIR="": _ensure_npm_modules

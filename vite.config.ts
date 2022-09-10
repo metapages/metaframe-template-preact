@@ -32,22 +32,17 @@ export default defineConfig(({ command, mode }) => ({
     factory: "h",
     fragment: "Fragment",
   },
-  // this is really stupid this should not be necessary
   plugins: [preact()],
   build: {
     outDir: OUTDIR,
-    // outDir:
-    //   DEPLOY_TARGET === DeployTarget.Glitch
-    //     ? "dist"
-    //     : `docs/${GithubPages_BUILD_SUB_DIR}`,
     target: "esnext",
     sourcemap: true,
     minify: mode === "development" ? false : "esbuild",
-    // emptyOutDir: DEPLOY_TARGET === DeployTarget.Glitch,
+    emptyOutDir: DEPLOY_TARGET === "glitch",
   },
   esbuild: {
     // https://github.com/vitejs/vite/issues/8644
-    logOverride: { 'this-is-undefined-in-esm': 'silent' }
+    logOverride: { "this-is-undefined-in-esm": "silent" },
   },
   server:
     DEPLOY_TARGET === "glitch"

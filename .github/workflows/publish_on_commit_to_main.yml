@@ -36,6 +36,10 @@ jobs:
       - name: Login to GitHub Container Registry
         # We could login directly, but the docker/login-action@v1 action includes a cleanup operation that deletes the auth credential
         uses: docker/login-action@v1
+        env:
+          DOCKER_REGISTRY: ghcr.io
+          # https://docs.github.com/en/free-pro-team@latest/actions/reference/authentication-in-a-workflow#about-the-github_token-secret
+          GITHUB_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}

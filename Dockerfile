@@ -53,5 +53,8 @@ RUN /usr/bin/npm i -g npm@8.17.0
 # /repo is also hard-coded in the justfile
 WORKDIR /repo
 
+# https://github.com/actions/runner/issues/2033
+RUN git config --global --add safe.directory /github/workspace
+
 # Add user aliases to the shell if available
 RUN echo "if [ -f /repo/.tmp/.aliases ]; then source /repo/.tmp/.aliases; fi" >> /root/.bashrc

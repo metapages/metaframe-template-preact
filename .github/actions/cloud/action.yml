@@ -17,7 +17,7 @@ runs:
   args:
    - 'bash'
    - '-c'
-   - 'git reset --hard HEAD && export GIT_CEILING_DIRECTORIES=/__w && git config --global --add safe.directory /github/workspace && ${{ inputs.command }}'
+   - 'export GIT_CEILING_DIRECTORIES=/__w && git config --global --add safe.directory /github/workspace && git reset --hard HEAD && ${{ inputs.command }}'
 branding:
   icon: 'aperture'
   color: 'green'

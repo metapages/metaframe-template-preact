@@ -11,23 +11,21 @@ description: |
    - push
   This action typically takes about 10s so 👍
 
-
 runs:
   using: composite
   steps:
     - shell: bash
       run: |
-        echo $GITHUB_TOKEN | docker login -u USERNAME --password-stdin ghcr.io
-        export DOCKER_BUILDKIT=1
-        echo "GITHUB_REPOSITORY=${GITHUB_REPOSITORY}"
-        export DOCKER_CLI_EXPERIMENTAL=enabled
-        export DOCKER_IMAGE="ghcr.io/${GITHUB_REPOSITORY}-cloud"
-        export CACHE="${DOCKER_IMAGE}:cache"
-        echo "CACHE=${CACHE}"
-        echo -e "🌱 docker pull $CACHE"
-        (docker pull $CACHE || true)
-        echo -e "🌱 docker build --push --build-arg BUILDKIT_INLINE_CACHE=1 --cache-from=$CACHE --tag ${DOCKER_IMAGE}:cache --file ./.cloudseed/deployments/Dockerfile ."
-        docker build --push --build-arg BUILDKIT_INLINE_CACHE=1 --cache-from=$CACHE --tag ${DOCKER_IMAGE}:cache --file ./.cloudseed/deployments/Dockerfile .
-        echo -e "🌱 docker push $CACHE"
-        docker push $CACHE || true
-        sed -i'' "s#  image: .*#  image: $CACHE#g" .github/actions/deployments/action.yml
+        export DOCKER_BUILDKIT=1 &&
+        echo "GITHUB_REPOSITORY=${GITHUB_REPOSITORY}" &&
+        export DOCKER_CLI_EXPERIMENTAL=enabled &&
+        export DOCKER_IMAGE="ghcr.io/${GITHUB_REPOSITORY}" &&
+        CACHE="${DOCKER_IMAGE}:cache" &&
+        echo "CACHE=${CACHE}" &&
+        echo -e "🌱 docker pull $CACHE" &&
+        (docker pull $CACHE || true) &&
+        echo -e "🌱 docker build . --build-arg BUILDKIT_INLINE_CACHE=1 --cache-from=$CACHE --tag ${DOCKER_IMAGE}:cache" &&
+        docker build . --build-arg BUILDKIT_INLINE_CACHE=1 --cache-from=$CACHE --tag ${DOCKER_IMAGE}:cache &&
+        echo -e "🌱 docker push $CACHE" &&
+        docker push $CACHE &&
+        sed -i'' "s#  image: .*#  image: $CACHE#g" .github/actions/cloud/action.yml

@@ -226,7 +226,7 @@ _ensureGitPorcelain:
 
 _fix_git_actions_permission:
     #!/usr/bin/env bash
-    set -euo pipefail
+    set -eo pipefail
     # workaround for github actions docker permissions issue
     if [ "${GITHUB_WORKSPACE}" != "" ]; then
         echo -e "🍀 DOING THE safe.directory THING"

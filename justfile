@@ -60,14 +60,15 @@ dev: _mkcert _ensure_npm_modules (_tsc "--build")
     export BASE=
     VITE_APP_ORIGIN=${APP_ORIGIN} {{vite}} --clearScreen false ${MAYBE_OPEN_BROWSER}
 
-
-#
 # Add "_npm_publish" to the end of this command to publish to npm
 # [Default] Add "_githubpages_publish" to the end of this command to publish to github pages
-# Publish to npm | github pages.
-publish npmversionargs="patch": _fix_git_actions_permission _ensureGitPorcelain (_tsc "--build") (_npm_version npmversionargs) _githubpages_publish
-    @# Push the tags up
-    # git push origin v$(cat package.json | jq -r '.version')
+# reaction to "publish". on new git version tag: publish code to github pages
+on-tag: _fix_git_actions_permission _ensureGitPorcelain (_tsc "--build") _githubpages_publish
+
+# Increment semver version, push the tags (triggering "on-tag")
+@publish npmversionargs="patch": _fix_git_actions_permission _ensureGitPorcelain (_npm_version npmversionargs)
+    # Push the tags up
+    @git push origin v$(cat package.json | jq -r '.version')
 
 build BASE="": _ensure_npm_modules (_tsc "--build")
     HOST={{APP_FQDN}} \
@@ -93,6 +94,9 @@ watch:
 serve: _mkcert build
     cd docs && \
     npx http-server --cors '*' -a {{APP_FQDN}} -p {{APP_PORT}} --ssl --cert ../.certs/{{APP_FQDN}}.pem --key ../.certs/{{APP_FQDN}}-key.pem
+
+
+
 
 # Build npm package for publishing
 @_npm_build: _ensure_npm_modules

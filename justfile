@@ -210,7 +210,13 @@ _ensure_inside_docker:
     fi
 
 @_ensureGitPorcelain:
-    deno run --allow-all --unstable {{DENO_SOURCE}}/git/git-fail-if-uncommitted-files.ts
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # In github actions, we modify .github/actions/cloud/action.yml for reasons
+    # so do not do this check there
+    if [ "${GITHUB_WORKSPACE}" = "" ]; then
+        deno run --allow-all --unstable {{DENO_SOURCE}}/git/git-fail-if-uncommitted-files.ts
+    fi
 
 @_require_NPM_TOKEN:
 	if [ -z "{{NPM_TOKEN}}" ]; then echo "Missing NPM_TOKEN env var"; exit 1; fi

@@ -7,8 +7,8 @@ name: on-tag
 # https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions
 on:
   push:
-    branches:
-      - "automate-publish"
+    tags:
+      - "v*"
 
 env:
   DOCKER_COMPOSE_VERSION: 1.25.4

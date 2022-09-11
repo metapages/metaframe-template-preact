@@ -17,7 +17,7 @@ runs:
   args:
    - 'bash'
    - '-c'
-   - 'echo $(pwd) && ${{ inputs.command }}'
+   - 'export GIT_CEILING_DIRECTORIES=/__w && git config --global --add safe.directory /github/workspace && ${{ inputs.command }}'
 branding:
   icon: 'aperture'
   color: 'green'

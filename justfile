@@ -65,7 +65,7 @@ dev: _mkcert _ensure_npm_modules (_tsc "--build")
 # Publish to npm and github pages.
 publish npmversionargs="patch": _fix_git_actions_permission _ensureGitPorcelain (_tsc "--build") (_npm_version npmversionargs) _npm_publish _githubpages_publish
     @# Push the tags up
-    git push origin v$(cat package.json | jq -r '.version')
+    # git push origin v$(cat package.json | jq -r '.version')
 
 build BASE="": _ensure_npm_modules (_tsc "--build")
     HOST={{APP_FQDN}} \
@@ -226,6 +226,8 @@ _fix_git_actions_permission:
     set -euo pipefail
     # workaround for github actions docker permissions issue
     if [ "${GITHUB_WORKSPACE}" != "" ]; then
+        echo -e "🍀 DOING THE safe.directory THING"
         git config --global --add safe.directory /github/workspace
+        git config --global --add safe.directory /repo
         export GIT_CEILING_DIRECTORIES=/__w
     fi

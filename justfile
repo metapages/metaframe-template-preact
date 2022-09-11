@@ -214,7 +214,7 @@ _ensure_inside_docker:
 
 _ensureGitPorcelain:
     #!/usr/bin/env bash
-    set -euo pipefail
+    set -eo pipefail
     # In github actions, we modify .github/actions/cloud/action.yml for reasons
     # so do not do this check there
     if [ "${GITHUB_WORKSPACE}" = "" ]; then

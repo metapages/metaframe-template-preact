@@ -65,13 +65,12 @@ dev: _mkcert _ensure_npm_modules (_tsc "--build")
     # Push the tags up
     git push origin v$(cat package.json | jq -r '.version')
 
-# _fix_git_actions_permission _ensureGitPorcelain (_tsc "--build") _githubpages_publish
 # Add "_npm_publish" to the end of this command to publish to npm
 # [Default] Add "_githubpages_publish" to the end of this command to publish to github pages
 # reaction to "publish". on new git version tag: publish code to github pages
-on-tag:
-    echo "💕💕💕 on-tag"
+on-tag: _fix_git_actions_permission _ensureGitPorcelain (_tsc "--build") _githubpages_publish
 
+# Build the app for production
 build BASE="": _ensure_npm_modules (_tsc "--build")
     HOST={{APP_FQDN}} \
     OUTDIR=./docs \

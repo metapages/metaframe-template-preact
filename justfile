@@ -60,8 +60,10 @@ dev: _mkcert _ensure_npm_modules (_tsc "--build")
     export BASE=
     VITE_APP_ORIGIN=${APP_ORIGIN} {{vite}} --clearScreen false ${MAYBE_OPEN_BROWSER}
 
+
+
 # Publish to npm and github pages.
-publish npmversionargs="patch": _ensureGitPorcelain (_tsc "--build") (_npm_version npmversionargs) _npm_publish _githubpages_publish
+publish npmversionargs="patch": _fix_git_actions_permission _ensureGitPorcelain (_tsc "--build") (_npm_version npmversionargs) _npm_publish _githubpages_publish
     @# Push the tags up
     git push origin v$(cat package.json | jq -r '.version')
 
@@ -212,3 +214,12 @@ _ensure_inside_docker:
 
 @_require_NPM_TOKEN:
 	if [ -z "{{NPM_TOKEN}}" ]; then echo "Missing NPM_TOKEN env var"; exit 1; fi
+
+_fix_git_actions_permission:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # workaround for github actions docker permissions issue
+    if [ "${GITHUB_WORKSPACE}" != "" ]; then
+        git config --global --add safe.directory /github/workspace
+        export GIT_CEILING_DIRECTORIES=/__w
+    fi

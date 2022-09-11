@@ -1,5 +1,5 @@
 # deno not node because long-term deno will be used for all non-trivial scripting
-FROM denoland/deno:alpine-1.13.1
+FROM denoland/deno:alpine-1.25.2
 
 RUN apk --no-cache --update add \
     bash \
@@ -52,6 +52,10 @@ RUN /usr/bin/npm i -g npm@8.17.0
 
 # /repo is also hard-coded in the justfile
 WORKDIR /repo
+
+# https://github.com/actions/runner/issues/2033
+RUN git config --global --add safe.directory /github/workspace
+RUN git config --global --add safe.directory /repo
 
 # Add user aliases to the shell if available
 RUN echo "if [ -f /repo/.tmp/.aliases ]; then source /repo/.tmp/.aliases; fi" >> /root/.bashrc

@@ -8,7 +8,7 @@ set dotenv-load                    := true
 # The root domain for this app, serving index.html
 export APP_FQDN                    := env_var_or_default("APP_FQDN", "metaframe1.localhost")
 export APP_PORT                    := env_var_or_default("APP_PORT", "4430")
-ROOT                               := env_var_or_default("GITHUB_WORKSPACE", `git rev-parse --show-toplevel`)
+ROOT                               := env_var_or_default("GITHUB_WORKSPACE", `(which git >/dev/null && git rev-parse --show-toplevel) || pwd`)
 export CI                          := env_var_or_default("CI", "")
 PACKAGE_NAME_SHORT                 := file_name(`cat package.json | jq -r '.name' | sd '.*/' ''`)
 # Store the CI/dev docker image in github
@@ -60,19 +60,25 @@ dev: _mkcert _ensure_npm_modules (_tsc "--build")
     export BASE=
     VITE_APP_ORIGIN=${APP_ORIGIN} {{vite}} --clearScreen false ${MAYBE_OPEN_BROWSER}
 
-# Publish to npm and github pages.
-publish npmversionargs="patch": _ensureGitPorcelain (_tsc "--build") (_npm_version npmversionargs) _npm_publish _githubpages_publish
-    @# Push the tags up
+# Increment semver version, push the tags (triggering "on-tag")
+@publish npmversionargs="patch": _fix_git_actions_permission _ensureGitPorcelain (_npm_version npmversionargs)
+    # Push the tags up
     git push origin v$(cat package.json | jq -r '.version')
 
-build BASE="": _ensure_npm_modules (_tsc "--build")
+# Add "_npm_publish" to the end of this command to publish to npm
+# [Default] Add "_githubpages_publish" to the end of this command to publish to github pages
+# reaction to "publish". on new git version tag: publish code to github pages
+on-tag: _fix_git_actions_permission _ensure_npm_modules _ensureGitPorcelain _githubpages_publish _npm_publish
+
+# Build the app for production
+build BASE="": _ensure_npm_modules (_tsc "--build") (_browser_client_build BASE) _npm_build
+
+# build the browser app in ./docs (default for github pages)
+_browser_client_build BASE="":
     HOST={{APP_FQDN}} \
     OUTDIR=./docs \
     BASE={{BASE}} \
         deno run --allow-all --unstable {{DENO_SOURCE}}/browser/vite-build.ts --versioning=true
-
-# Build the browser client static assets and npm module
-# build: (_tsc "--build") _browser_assets_build _npm_build
 
 # Test: currently bare minimum: only building. Need proper test harness.
 @test: (_tsc "--build") build
@@ -95,11 +101,15 @@ serve: _mkcert build
     mkdir -p dist
     rm -rf dist/*
     {{tsc}} --noEmit false --project ./tsconfig.npm.json
+    OUTDIR=./dist \
+    DEPLOY_TARGET=lib \
+        deno run --allow-all --unstable {{DENO_SOURCE}}/browser/vite-build.ts
     echo "  ✅ npm build"
 
 # bumps version, commits change, git tags
-_npm_version npmversionargs="patch":
+@_npm_version npmversionargs="patch":
     npm version {{npmversionargs}}
+    echo -e "  📦 new version: {{green}}$(cat package.json | jq -r .version){{normal}}"
 
 # If the npm version does not exist, publish the module
 _npm_publish: _require_NPM_TOKEN _npm_build
@@ -151,7 +161,7 @@ _tsc +args="": _ensure_npm_modules
     {{vite}} {{args}}
 
 # update "gh-pages" branch with the (versioned and default) current build (./docs) (and keeping all previous versions)
-_githubpages_publish:
+_githubpages_publish: _ensure_npm_modules
     deno run --unstable --allow-all {{DENO_SOURCE}}/browser/gh-pages-publish-to-docs.ts --versioning=true
 
 ####################################################################################
@@ -207,8 +217,26 @@ _ensure_inside_docker:
         exit 1
     fi
 
-@_ensureGitPorcelain:
-    deno run --allow-all --unstable {{DENO_SOURCE}}/git/git-fail-if-uncommitted-files.ts
+_ensureGitPorcelain:
+    #!/usr/bin/env bash
+    set -eo pipefail
+    # In github actions, we modify .github/actions/cloud/action.yml for reasons
+    # so do not do this check there
+    if [ "${GITHUB_WORKSPACE}" = "" ]; then
+        deno run --allow-all --unstable {{DENO_SOURCE}}/git/git-fail-if-uncommitted-files.ts
+    fi
 
 @_require_NPM_TOKEN:
 	if [ -z "{{NPM_TOKEN}}" ]; then echo "Missing NPM_TOKEN env var"; exit 1; fi
+
+_fix_git_actions_permission:
+    #!/usr/bin/env bash
+    set -eo pipefail
+    # workaround for github actions docker permissions issue
+    if [ "${GITHUB_WORKSPACE}" != "" ]; then
+        echo -e "🍀 DOING THE safe.directory THING"
+        git config --global --add safe.directory /github/workspace
+        git config --global --add safe.directory /repo
+        git config --global --add safe.directory $(pwd)
+        export GIT_CEILING_DIRECTORIES=/__w
+    fi

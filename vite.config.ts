@@ -5,7 +5,7 @@ import { resolve } from "path";
 import { defineConfig } from "vite";
 import preact from "@preact/preset-vite";
 
-// values acted on: [glitch]
+// values acted on: [glitch | lib]
 const DEPLOY_TARGET: string | undefined = process.env.DEPLOY_TARGET;
 const HOST: string = process.env.HOST || "metaframe1.localhost";
 const PORT: string = process.env.PORT || "4440";
@@ -14,6 +14,13 @@ const CERT_KEY_FILE: string | undefined = process.env.CERT_KEY_FILE;
 const BASE: string | undefined = process.env.BASE;
 const OUTDIR: string | undefined = process.env.OUTDIR;
 const INSIDE_CONTAINER: boolean = fs.existsSync("/.dockerenv");
+
+// Get the github pages path e.g. if served from https://<name>.github.io/<repo>/
+// then we need to pull out "<repo>"
+const packageJson :{name:string,version:string} = JSON.parse(
+  fs.readFileSync("./package.json", { encoding: "utf8", flag: "r" })
+);
+
 
 // https://vitejs.dev/config/
 export default defineConfig(({ command, mode }) => ({
@@ -32,22 +39,23 @@ export default defineConfig(({ command, mode }) => ({
     factory: "h",
     fragment: "Fragment",
   },
-  // this is really stupid this should not be necessary
   plugins: [preact()],
   build: {
-    outDir: OUTDIR,
-    // outDir:
-    //   DEPLOY_TARGET === DeployTarget.Glitch
-    //     ? "dist"
-    //     : `docs/${GithubPages_BUILD_SUB_DIR}`,
+    outDir: DEPLOY_TARGET === "lib" ? "dist" : OUTDIR,
     target: "esnext",
     sourcemap: true,
     minify: mode === "development" ? false : "esbuild",
-    // emptyOutDir: DEPLOY_TARGET === DeployTarget.Glitch,
+    emptyOutDir: DEPLOY_TARGET === "glitch",
+    lib: DEPLOY_TARGET === "lib" ? {
+      entry: resolve(__dirname, 'src/lib/index.ts'),
+      name: packageJson.name,
+      // the proper extensions will be added
+      fileName: 'index'
+    } : undefined,
   },
   esbuild: {
     // https://github.com/vitejs/vite/issues/8644
-    logOverride: { 'this-is-undefined-in-esm': 'silent' }
+    logOverride: { "this-is-undefined-in-esm": "silent" },
   },
   server:
     DEPLOY_TARGET === "glitch"

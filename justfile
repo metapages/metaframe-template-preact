@@ -68,17 +68,17 @@ dev: _mkcert _ensure_npm_modules (_tsc "--build")
 # Add "_npm_publish" to the end of this command to publish to npm
 # [Default] Add "_githubpages_publish" to the end of this command to publish to github pages
 # reaction to "publish". on new git version tag: publish code to github pages
-on-tag: _fix_git_actions_permission _ensureGitPorcelain (_tsc "--build") _npm_publish _githubpages_publish
+on-tag: _fix_git_actions_permission _ensureGitPorcelain _githubpages_publish
 
 # Build the app for production
-build BASE="": _ensure_npm_modules (_tsc "--build")
+build BASE="": _ensure_npm_modules (_tsc "--build") (_browser_client_build BASE) _npm_build
+
+# build the browser app in ./docs (default for github pages)
+_browser_client_build BASE="":
     HOST={{APP_FQDN}} \
     OUTDIR=./docs \
     BASE={{BASE}} \
         deno run --allow-all --unstable {{DENO_SOURCE}}/browser/vite-build.ts --versioning=true
-
-# Build the browser client static assets and npm module
-# build: (_tsc "--build") _browser_assets_build _npm_build
 
 # Test: currently bare minimum: only building. Need proper test harness.
 @test: (_tsc "--build") build
@@ -101,7 +101,9 @@ serve: _mkcert build
     mkdir -p dist
     rm -rf dist/*
     {{tsc}} --noEmit false --project ./tsconfig.npm.json
-    DEPLOY_TARGET=lib just build
+    OUTDIR=./dist \
+    DEPLOY_TARGET=lib \
+        deno run --allow-all --unstable {{DENO_SOURCE}}/browser/vite-build.ts
     echo "  ✅ npm build"
 
 # bumps version, commits change, git tags

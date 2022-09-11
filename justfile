@@ -95,9 +95,6 @@ serve: _mkcert build
     cd docs && \
     npx http-server --cors '*' -a {{APP_FQDN}} -p {{APP_PORT}} --ssl --cert ../.certs/{{APP_FQDN}}.pem --key ../.certs/{{APP_FQDN}}-key.pem
 
-
-
-
 # Build npm package for publishing
 @_npm_build: _ensure_npm_modules
     mkdir -p dist

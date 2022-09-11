@@ -105,7 +105,7 @@ serve: _mkcert build
 # bumps version, commits change, git tags
 @_npm_version npmversionargs="patch":
     npm version {{npmversionargs}}
-    echo -e "  📦 {{green}}new version{{normal}}: $(cat package.json | jq -r .version)"
+    echo -e "  📦 new version: {{green}}$(cat package.json | jq -r .version){{normal}}"
 
 # If the npm version does not exist, publish the module
 _npm_publish: _require_NPM_TOKEN _npm_build

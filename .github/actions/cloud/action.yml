@@ -17,7 +17,7 @@ runs:
   args:
    - 'bash'
    - '-c'
-   - '${{ inputs.command }}'
+   - 'echo $(pwd) && ${{ inputs.command }}'
 branding:
   icon: 'aperture'
   color: 'green'

@@ -229,5 +229,6 @@ _fix_git_actions_permission:
         echo -e "🍀 DOING THE safe.directory THING"
         git config --global --add safe.directory /github/workspace
         git config --global --add safe.directory /repo
+        git config --global --add safe.directory $(pwd)
         export GIT_CEILING_DIRECTORIES=/__w
     fi

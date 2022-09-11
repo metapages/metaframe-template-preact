@@ -22,10 +22,8 @@ jobs:
     steps:
       - name: Check out the repo
         uses: actions/checkout@v3
-        env:
-          # https://docs.github.com/en/free-pro-team@latest/actions/reference/authentication-in-a-workflow#about-the-github_token-secret
-          GITHUB_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
         with:
+          token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
           fetch-depth: '0'
 
       # This enables build caching

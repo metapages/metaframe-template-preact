@@ -209,7 +209,7 @@ _ensure_inside_docker:
         exit 1
     fi
 
-@_ensureGitPorcelain:
+_ensureGitPorcelain:
     #!/usr/bin/env bash
     set -euo pipefail
     # In github actions, we modify .github/actions/cloud/action.yml for reasons

@@ -61,9 +61,11 @@ dev: _mkcert _ensure_npm_modules (_tsc "--build")
     VITE_APP_ORIGIN=${APP_ORIGIN} {{vite}} --clearScreen false ${MAYBE_OPEN_BROWSER}
 
 
-
-# Publish to npm and github pages.
-publish npmversionargs="patch": _fix_git_actions_permission _ensureGitPorcelain (_tsc "--build") (_npm_version npmversionargs) _npm_publish _githubpages_publish
+#
+# Add "_npm_publish" to the end of this command to publish to npm
+# [Default] Add "_githubpages_publish" to the end of this command to publish to github pages
+# Publish to npm | github pages.
+publish npmversionargs="patch": _fix_git_actions_permission _ensureGitPorcelain (_tsc "--build") (_npm_version npmversionargs) _githubpages_publish
     @# Push the tags up
     # git push origin v$(cat package.json | jq -r '.version')
 

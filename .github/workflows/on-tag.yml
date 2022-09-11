@@ -57,6 +57,6 @@ jobs:
           DOCKER_REGISTRY: ghcr.io
           # https://docs.github.com/en/free-pro-team@latest/actions/reference/authentication-in-a-workflow#about-the-github_token-secret
           GITHUB_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         with:
           command: "just on-tag"
-          github_token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}

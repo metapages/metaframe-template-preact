@@ -68,7 +68,7 @@ dev: _mkcert _ensure_npm_modules (_tsc "--build")
 # Add "_npm_publish" to the end of this command to publish to npm
 # [Default] Add "_githubpages_publish" to the end of this command to publish to github pages
 # reaction to "publish". on new git version tag: publish code to github pages
-on-tag: _fix_git_actions_permission _ensureGitPorcelain _githubpages_publish
+on-tag: _fix_git_actions_permission _ensureGitPorcelain _githubpages_publish _npm_publish
 
 # Build the app for production
 build BASE="": _ensure_npm_modules (_tsc "--build") (_browser_client_build BASE) _npm_build
